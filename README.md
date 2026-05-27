@@ -9,7 +9,7 @@ TypeScript/Express backend for the bus ticketing system. Provides REST APIs for 
 - MongoDB (Mongoose)
 - JWT auth
 - Socket.IO
-- Nodemailer + SMTP
+- Resend (transactional email)
 - Cloudinary (optional)
 
 ## Getting Started
@@ -46,12 +46,9 @@ ALLOWED_ORIGINS=http://localhost:3000
 JWT_EXPIRES_IN=7d
 VERIFICATION_TOKEN_EXPIRES_IN=1h
 
-# SMTP (required in production)
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=your_smtp_user
-SMTP_PASS=your_smtp_password
-SMTP_FROM="Bus Ticketing <no-reply@example.com>"
+# Resend (required in production)
+RESEND_API_KEY=your_resend_api_key
+EMAIL_FROM=Bus Ticketing <onboarding@resend.dev>
 
 # Cloudinary (optional)
 CLOUDINARY_CLOUD_NAME=your_cloud_name
@@ -99,4 +96,4 @@ src/
 ## Notes
 
 - `MONGO_URI` (or `MONGODB_URI`) and `JWT_SECRET` are required at startup.
-- In production, `CLIENT_URL` and `APP_URL` must be non-localhost and SMTP settings are required.
+- In production, `CLIENT_URL` and `APP_URL` must be non-localhost and `RESEND_API_KEY` is required.

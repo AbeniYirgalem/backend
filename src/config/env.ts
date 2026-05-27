@@ -20,12 +20,9 @@ const allowedOrigins = new Set<string>([
     .filter(Boolean),
 ]);
 
-const smtpHost = process.env.SMTP_HOST || "";
-const smtpPort = Number(process.env.SMTP_PORT || 587);
-const smtpUser = process.env.SMTP_USER || "";
-const smtpPass = process.env.SMTP_PASS || "";
-const smtpFrom = process.env.SMTP_FROM || "";
-const smtpConfigured = Boolean(smtpHost && smtpUser && smtpPass && smtpFrom);
+const resendApiKey = process.env.RESEND_API_KEY || "";
+const emailFrom =
+  process.env.EMAIL_FROM || "Bus Ticketing <onboarding@resend.dev>";
 
 export const env = {
   nodeEnv,
@@ -39,12 +36,8 @@ export const env = {
   clientUrl,
   allowedOriginsRaw,
   allowedOrigins: Array.from(allowedOrigins).filter(Boolean),
-  smtpHost,
-  smtpPort,
-  smtpUser,
-  smtpPass,
-  smtpFrom,
-  smtpConfigured,
+  resendApiKey,
+  emailFrom,
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || "",
@@ -62,9 +55,7 @@ if (env.nodeEnv === "production") {
       "CLIENT_URL and APP_URL must be non-localhost in production",
     );
   }
-  if (!env.smtpConfigured) {
-    throw new Error(
-      "SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM are required in production",
-    );
+  if (!env.resendApiKey) {
+    throw new Error("RESEND_API_KEY is required in production");
   }
 }

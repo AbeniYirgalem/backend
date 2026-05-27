@@ -1,24 +1,15 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { env } from "./env.js";
 
-const isGmail = env.smtpHost.toLowerCase().includes("gmail");
+/**
+ * Resend client – used by the email service to dispatch transactional emails.
+ * Falls back to a lightweight stub in development so the app starts even
+ * without a RESEND_API_KEY, logging the email payload to the console instead.
+ */
+export const resend = env.resendApiKey
+  ? new Resend(env.resendApiKey)
+  : null;
 
-export const mailer = env.smtpConfigured
-  ? nodemailer.createTransport({
-      host: env.smtpHost,
-      port: env.smtpPort,
-      secure: env.smtpPort === 465,
-      service: isGmail ? "gmail" : undefined,
-      auth: {
-        user: env.smtpUser,
-        pass: env.smtpPass,
-      },
-      connectionTimeout: 10_000,
-      socketTimeout: 10_000,
-      greetingTimeout: 10_000,
-    })
-  : nodemailer.createTransport({
-      jsonTransport: true,
-    });
-
-export const mailerFrom = env.smtpFrom || "no-reply@local";
+/** Default "from" address for all outgoing emails. */
+export const emailFrom =
+  env.emailFrom || "Bus Ticketing <onboarding@resend.dev>";
