@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { smtpTransporter, emailFrom } from "../config/mailer.js";
+import { brevoClient, emailFrom } from "../config/mailer.js";
 
 // ── Reusable HTML wrapper ──────────────────────────────────────────────────────
 function wrapHtml(body: string): string {
@@ -21,7 +21,15 @@ function ctaButton(href: string, label: string): string {
   return `<a href="${href}" style="display:inline-block;background:#111827;color:#ffffff;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:600;">${label}</a>`;
 }
 
-// ── Send helper (logs in dev when SMTP is not configured) ────────────────────
+function parseSender(value: string) {
+  const match = value.match(/^(.*)<(.+)>$/);
+  if (!match) {
+    return { name: value.trim(), email: value.trim() };
+  }
+  return { name: match[1].trim(), email: match[2].trim() };
+}
+
+// ── Send helper (logs in dev when Brevo API is not configured) ───────────────
 async function send(options: {
   to: string;
   subject: string;
@@ -42,17 +50,17 @@ async function send(options: {
     );
   }
 
-  if (!smtpTransporter) {
+  if (!brevoClient) {
     // eslint-disable-next-line no-console
     console.warn(
-      `[email-service] SMTP transporter is NULL (BREVO_USER/BREVO_PASS missing or empty). Email NOT sent to ${options.to}`,
+      `[email-service] Brevo API client is NULL (BREVO_API_KEY missing or empty). Email NOT sent to ${options.to}`,
     );
     return;
   }
 
   // eslint-disable-next-line no-console
   console.log(
-    `[email-service] SMTP config loaded | user: ${Boolean(env.brevoUser)} | pass: ${Boolean(env.brevoPass)}`,
+    `[email-service] Brevo API configured | key: ${Boolean(env.brevoApiKey)}`,
   );
 
   // eslint-disable-next-line no-console
@@ -61,21 +69,22 @@ async function send(options: {
   );
 
   try {
-    const info = await smtpTransporter.sendMail({
-      from: emailFrom,
-      to: options.to,
+    const sender = parseSender(emailFrom);
+    const response = await brevoClient.sendTransacEmail({
+      sender,
+      to: [{ email: options.to }],
       subject: options.subject,
-      html: options.html,
-      text: options.text,
+      htmlContent: options.html,
+      textContent: options.text,
     });
 
     // eslint-disable-next-line no-console
     console.log(
-      `[email-service] Email sent successfully. ID: ${info.messageId}`,
+      `[email-service] Email sent successfully. ID: ${response?.messageId || "(unknown)"}`,
     );
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error("[email-service] SMTP send error:", error);
+    console.error("[email-service] Brevo API send error:", error);
     throw error;
   }
 }
@@ -153,15 +162,15 @@ export async function sendWelcomeEmail(payload: { to: string; name: string }) {
 
 export async function sendTestEmail(payload: { to: string }) {
   const html = wrapHtml(`
-    <h2 style="margin:0 0 12px;">Brevo SMTP test email</h2>
-    <p style="margin:0 0 16px;">If you received this email, Brevo SMTP is configured correctly.</p>
+    <h2 style="margin:0 0 12px;">Brevo API test email</h2>
+    <p style="margin:0 0 16px;">If you received this email, Brevo API is configured correctly.</p>
     <p style="margin:0;">Sent at ${new Date().toUTCString()}</p>
   `);
 
   await send({
     to: payload.to,
-    subject: "Brevo SMTP test email",
+    subject: "Brevo API test email",
     html,
-    text: "If you received this email, Brevo SMTP is configured correctly.",
+    text: "If you received this email, Brevo API is configured correctly.",
   });
 }

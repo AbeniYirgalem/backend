@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
+import { performance } from "perf_hooks";
 import { env } from "../config/env.js";
 import { User } from "../models/User.js";
 import { Card } from "../models/Card.js";
@@ -64,12 +65,20 @@ export async function registerUser(payload: {
   role?: "passenger" | "operator" | "admin";
   phone?: string;
 }) {
+  const startTime = performance.now();
+
+  const existingStart = performance.now();
   const existing = await User.findOne({ email: payload.email }).lean();
+  const existingMs = performance.now() - existingStart;
   if (existing) {
     throw new Error("User already exists");
   }
 
+  const hashStart = performance.now();
   const hashed = await bcrypt.hash(payload.password, 10);
+  const hashMs = performance.now() - hashStart;
+
+  const createUserStart = performance.now();
   const user = await User.create({
     name: payload.name,
     email: payload.email,
@@ -78,10 +87,12 @@ export async function registerUser(payload: {
     phone: payload.phone,
     isVerified: false,
   });
+  const createUserMs = performance.now() - createUserStart;
 
   // ── Auto-generate RFID card for passengers ──
   const role = payload.role || "passenger";
   if (role === "passenger") {
+    const cardStart = performance.now();
     let cardUid = generateCardUid();
     // Ensure uniqueness
     let attempts = 0;
@@ -96,8 +107,14 @@ export async function registerUser(payload: {
       balance: 0,
       status: "active",
     });
+    const cardMs = performance.now() - cardStart;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[auth-service] Registration timing | step=card_create | ${cardMs.toFixed(1)}ms`,
+    );
   }
 
+  const tokenStart = performance.now();
   const { token, expiresAt } = createVerificationToken({
     id: user._id.toString(),
     email: user.email,
@@ -106,6 +123,7 @@ export async function registerUser(payload: {
   user.verificationToken = hashedToken;
   user.verificationTokenExpiry = expiresAt;
   await user.save();
+  const tokenMs = performance.now() - tokenStart;
 
   if (!user.email) {
     throw createHttpError(
@@ -120,18 +138,23 @@ export async function registerUser(payload: {
     `[auth-service] Sending verification email to ${user.email} | token: ${tokenPreview}`,
   );
 
-  try {
-    await sendVerificationEmail({
-      to: user.email,
-      name: user.name,
-      token,
-      expiresAt,
-    });
-  } catch (error) {
+  const emailStart = performance.now();
+  void sendVerificationEmail({
+    to: user.email,
+    name: user.name,
+    token,
+    expiresAt,
+  }).catch((error) => {
     // eslint-disable-next-line no-console
     console.error("[auth-service] Failed to send verification email", error);
-    throw createHttpError("Failed to send verification email.", 500);
-  }
+  });
+  const emailMs = performance.now() - emailStart;
+
+  const totalMs = performance.now() - startTime;
+  // eslint-disable-next-line no-console
+  console.log(
+    `[auth-service] Registration timing | lookup=${existingMs.toFixed(1)}ms | hash=${hashMs.toFixed(1)}ms | create=${createUserMs.toFixed(1)}ms | token=${tokenMs.toFixed(1)}ms | email_trigger=${emailMs.toFixed(1)}ms | total=${totalMs.toFixed(1)}ms`,
+  );
 
   return user;
 }

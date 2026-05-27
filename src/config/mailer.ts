@@ -1,22 +1,17 @@
-import nodemailer from "nodemailer";
+import SibApiV3Sdk from "sib-api-v3-sdk";
 import { env } from "./env.js";
 
 /**
- * SMTP transport for Brevo (Sendinblue). Falls back to null when credentials
- * are missing so the app can still boot in development.
+ * Brevo Transactional Email API client. Falls back to null when the API key
+ * is missing so the app can still boot in development.
  */
-export const smtpTransporter =
-  env.brevoUser && env.brevoPass
-    ? nodemailer.createTransport({
-        host: "smtp-relay.brevo.com",
-        port: 587,
-        secure: false,
-        auth: {
-          user: env.brevoUser,
-          pass: env.brevoPass,
-        },
-      })
-    : null;
+export const brevoClient = env.brevoApiKey
+  ? (() => {
+      const client = SibApiV3Sdk.ApiClient.instance;
+      client.authentications["api-key"].apiKey = env.brevoApiKey;
+      return new SibApiV3Sdk.TransactionalEmailsApi();
+    })()
+  : null;
 
 /** Default "from" address for all outgoing emails. */
 export const emailFrom = env.emailFrom;
