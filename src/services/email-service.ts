@@ -28,6 +28,20 @@ async function send(options: {
   html: string;
   text?: string;
 }) {
+  if (!emailFrom) {
+    throw new Error(
+      "EMAIL_FROM is not configured. Set a verified Brevo sender.",
+    );
+  }
+  if (
+    env.nodeEnv === "production" &&
+    emailFrom.includes("bus-ticketing.local")
+  ) {
+    throw new Error(
+      "EMAIL_FROM must be a verified Brevo sender in production.",
+    );
+  }
+
   if (!smtpTransporter) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -35,6 +49,11 @@ async function send(options: {
     );
     return;
   }
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[email-service] SMTP config loaded | user: ${Boolean(env.brevoUser)} | pass: ${Boolean(env.brevoPass)}`,
+  );
 
   // eslint-disable-next-line no-console
   console.log(

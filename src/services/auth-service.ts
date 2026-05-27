@@ -107,16 +107,31 @@ export async function registerUser(payload: {
   user.verificationTokenExpiry = expiresAt;
   await user.save();
 
-  void sendVerificationEmail({
-    to: user.email,
-    name: user.name,
-    token,
-    expiresAt,
-  }).catch((error) => {
-    // Avoid blocking registration on email failures.
+  if (!user.email) {
+    throw createHttpError(
+      "User email is missing; cannot send verification email.",
+      400,
+    );
+  }
+
+  const tokenPreview = `${token.slice(0, 12)}...${token.slice(-6)}`;
+  // eslint-disable-next-line no-console
+  console.log(
+    `[auth-service] Sending verification email to ${user.email} | token: ${tokenPreview}`,
+  );
+
+  try {
+    await sendVerificationEmail({
+      to: user.email,
+      name: user.name,
+      token,
+      expiresAt,
+    });
+  } catch (error) {
     // eslint-disable-next-line no-console
-    console.error("Failed to send verification email", error);
-  });
+    console.error("[auth-service] Failed to send verification email", error);
+    throw createHttpError("Failed to send verification email.", 500);
+  }
 
   return user;
 }
