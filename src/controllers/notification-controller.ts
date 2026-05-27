@@ -13,11 +13,7 @@ export const listMyNotifications = asyncHandler(
     const unreadOnly = req.query.unread === "true";
 
     const filter: Record<string, unknown> = {
-      $or: [
-        { userId: req.user!.id },
-        { audience: "all" },
-        { audience: "passenger" },
-      ],
+      userId: req.user!.id,
     };
 
     if (unreadOnly) filter.read = false;
@@ -44,7 +40,10 @@ export const listMyNotifications = asyncHandler(
 
 /** PATCH /api/notifications/:id/read — Mark a single notification as read */
 export const markRead = asyncHandler(async (req: Request, res: Response) => {
-  await Notification.updateOne({ _id: req.params.id }, { read: true });
+  await Notification.updateOne(
+    { _id: req.params.id, userId: req.user!.id },
+    { read: true },
+  );
 
   logActivity(req.user!.id, "NOTIFICATION_READ", {
     notificationId: req.params.id,
@@ -54,31 +53,23 @@ export const markRead = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /** PATCH /api/notifications/read-all — Mark all user notifications as read */
-export const markAllRead = asyncHandler(
-  async (req: Request, res: Response) => {
-    await Notification.updateMany(
-      {
-        $or: [{ userId: req.user!.id }, { audience: "passenger" }],
-        read: false,
-      },
-      { read: true },
-    );
+export const markAllRead = asyncHandler(async (req: Request, res: Response) => {
+  await Notification.updateMany(
+    { userId: req.user!.id, read: false },
+    { read: true },
+  );
 
-    logActivity(req.user!.id, "NOTIFICATION_READ", { all: true });
+  logActivity(req.user!.id, "NOTIFICATION_READ", { all: true });
 
-    sendResponse(res, 200, "All notifications marked as read", null);
-  },
-);
+  sendResponse(res, 200, "All notifications marked as read", null);
+});
 
 /** GET /api/notifications/unread-count — Lightweight count for badge */
 export const getUnreadCount = asyncHandler(
   async (req: Request, res: Response) => {
     const count = await Notification.countDocuments({
-      $or: [
-        { userId: req.user!.id, read: false },
-        { audience: "passenger", read: false },
-        { audience: "all", read: false },
-      ],
+      userId: req.user!.id,
+      read: false,
     });
     sendResponse(res, 200, "Unread count", { count });
   },

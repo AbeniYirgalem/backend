@@ -18,6 +18,7 @@ import tripBookingRoutes from "./trip-booking-routes.js";
 import rfidRoutes from "./rfid-routes.js";
 import notificationRoutes from "./notification-routes.js";
 import activityRoutes from "./activity-routes.js";
+import operatorRoutes from "./operator-routes.js";
 
 const router = Router();
 
@@ -40,5 +41,6 @@ router.use("/trip-bookings", tripBookingRoutes);
 router.use("/rfid", rfidRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/activity", activityRoutes);
+router.use("/operators", operatorRoutes);
 
 export default router;
