@@ -10,6 +10,7 @@ const appUrl = process.env.APP_URL || clientUrl;
 const allowedOriginsRaw = process.env.ALLOWED_ORIGINS || "";
 const allowedOrigins = new Set<string>([
   "http://localhost:3000",
+  "https://frontend-seven-beta-42.vercel.app",
   clientUrl,
   frontendUrl,
   appUrl,

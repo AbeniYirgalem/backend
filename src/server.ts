@@ -15,6 +15,7 @@ app.set("io", io);
 
 // CORS configuration: allow frontend URLs from env plus localhost for development.
 const allowedOrigins = new Set(env.allowedOrigins);
+const allowAllOrigins = allowedOrigins.has("*");
 
 const corsOptions = {
   origin: (
@@ -23,7 +24,9 @@ const corsOptions = {
   ) => {
     // allow requests with no origin (like server-to-server or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.has(origin)) return callback(null, true);
+    if (allowAllOrigins || allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
     return callback(new Error("CORS policy: Origin not allowed"));
   },
   credentials: true,
