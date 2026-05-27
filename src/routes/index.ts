@@ -1,0 +1,44 @@
+import { Router } from "express";
+import authRoutes from "./auth-routes.js";
+import userRoutes from "./user-routes.js";
+import busRoutes from "./bus-routes.js";
+import routeRoutes from "./route-routes.js";
+import scheduleRoutes from "./schedule-routes.js";
+import bookingRoutes from "./booking-routes.js";
+import ticketRoutes from "./ticket-routes.js";
+import reviewRoutes from "./review-routes.js";
+import adminRoutes from "./admin-routes.js";
+import cardRoutes from "./card-routes.js";
+import tripRoutes from "./trip-routes.js";
+import transactionRoutes from "./transaction-routes.js";
+import metricsRoutes from "./metrics-routes.js";
+import routingRoutes from "./routing-routes.js";
+import intelligenceRoutes from "./intelligence-routes.js";
+import tripBookingRoutes from "./trip-booking-routes.js";
+import rfidRoutes from "./rfid-routes.js";
+import notificationRoutes from "./notification-routes.js";
+import activityRoutes from "./activity-routes.js";
+
+const router = Router();
+
+router.use("/auth", authRoutes);
+router.use("/users", userRoutes);
+router.use("/buses", busRoutes);
+router.use("/routes", routeRoutes);
+router.use("/schedules", scheduleRoutes);
+router.use("/bookings", bookingRoutes);
+router.use("/tickets", ticketRoutes);
+router.use("/reviews", reviewRoutes);
+router.use("/admin", adminRoutes);
+router.use("/cards", cardRoutes);
+router.use("/trips", tripRoutes);
+router.use("/transactions", transactionRoutes);
+router.use("/metrics", metricsRoutes);
+router.use("/routing", routingRoutes);
+router.use("/intelligence", intelligenceRoutes);
+router.use("/trip-bookings", tripBookingRoutes);
+router.use("/rfid", rfidRoutes);
+router.use("/notifications", notificationRoutes);
+router.use("/activity", activityRoutes);
+
+export default router;

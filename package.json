@@ -1,0 +1,41 @@
+{
+  "name": "bus-ticketing-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon",
+    "build": "tsc -p tsconfig.json && node scripts/verify-build.js",
+    "start": "node dist/server.js",
+    "lint": "eslint .",
+    "seed:routes": "tsx src/seeds/insertRoutes.ts",
+    "seed:more-routes": "tsx src/seeds/insertMoreRoutes.ts"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.25",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^20.19.41",
+    "@types/nodemailer": "^6.4.23",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.5.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^9.6.2",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.15",
+    "socket.io": "^4.8.1",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "nodemon": "^3.1.9"
+  }
+}
