@@ -30,14 +30,16 @@ async function send(options: {
 }) {
   if (!resend) {
     // eslint-disable-next-line no-console
-    console.log(
-      `[email-service] Resend not configured – email to ${options.to} logged:\n`,
-      { subject: options.subject, text: options.text ?? "(html only)" },
+    console.warn(
+      `[email-service] Resend client is NULL (RESEND_API_KEY missing or empty). Email NOT sent to ${options.to}`,
     );
     return;
   }
 
-  const { error } = await resend.emails.send({
+  // eslint-disable-next-line no-console
+  console.log(`[email-service] Sending email to ${options.to} | subject: "${options.subject}" | from: "${emailFrom}"`);
+
+  const { data, error } = await resend.emails.send({
     from: emailFrom,
     to: options.to,
     subject: options.subject,
@@ -46,8 +48,13 @@ async function send(options: {
   });
 
   if (error) {
+    // eslint-disable-next-line no-console
+    console.error(`[email-service] Resend API error:`, JSON.stringify(error, null, 2));
     throw new Error(`Resend error: ${error.message}`);
   }
+
+  // eslint-disable-next-line no-console
+  console.log(`[email-service] Email sent successfully. ID: ${data?.id}`);
 }
 
 // ── Public email functions ─────────────────────────────────────────────────────

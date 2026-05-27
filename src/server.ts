@@ -53,6 +53,8 @@ connectDB()
       // eslint-disable-next-line no-console
       console.log(`Server running on port ${env.port}`);
       // eslint-disable-next-line no-console
+      // Note: avoid logging the API key in production for security reasons, but it's helpful in development to confirm it's loaded.
+      console.log(process.env.RESEND_API_KEY);
       console.log(
         `Allowed CORS origins: ${env.allowedOrigins.join(", ") || "(none)"}`,
       );
