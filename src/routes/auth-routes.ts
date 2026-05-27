@@ -3,6 +3,7 @@ import {
   login,
   register,
   resendVerification,
+  testEmail,
   verifyEmail,
 } from "../controllers/auth-controller.js";
 import { resendVerificationLimiter } from "../middleware/rate-limit.js";
@@ -11,6 +12,7 @@ import {
   loginSchema,
   registerSchema,
   resendVerificationSchema,
+  testEmailSchema,
   verifyEmailSchema,
 } from "../validations/auth.js";
 
@@ -26,5 +28,6 @@ router.post(
   validate(resendVerificationSchema),
   resendVerification,
 );
+router.post("/test-email", validate(testEmailSchema), testEmail);
 
 export default router;

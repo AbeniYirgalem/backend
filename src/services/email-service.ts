@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { resend, emailFrom } from "../config/mailer.js";
+import { smtpTransporter, emailFrom } from "../config/mailer.js";
 
 // ── Reusable HTML wrapper ──────────────────────────────────────────────────────
 function wrapHtml(body: string): string {
@@ -21,40 +21,44 @@ function ctaButton(href: string, label: string): string {
   return `<a href="${href}" style="display:inline-block;background:#111827;color:#ffffff;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:600;">${label}</a>`;
 }
 
-// ── Send helper (logs in dev when Resend is not configured) ────────────────────
+// ── Send helper (logs in dev when SMTP is not configured) ────────────────────
 async function send(options: {
   to: string;
   subject: string;
   html: string;
   text?: string;
 }) {
-  if (!resend) {
+  if (!smtpTransporter) {
     // eslint-disable-next-line no-console
     console.warn(
-      `[email-service] Resend client is NULL (RESEND_API_KEY missing or empty). Email NOT sent to ${options.to}`,
+      `[email-service] SMTP transporter is NULL (BREVO_USER/BREVO_PASS missing or empty). Email NOT sent to ${options.to}`,
     );
     return;
   }
 
   // eslint-disable-next-line no-console
-  console.log(`[email-service] Sending email to ${options.to} | subject: "${options.subject}" | from: "${emailFrom}"`);
+  console.log(
+    `[email-service] Sending email to ${options.to} | subject: "${options.subject}" | from: "${emailFrom}"`,
+  );
 
-  const { data, error } = await resend.emails.send({
-    from: emailFrom,
-    to: options.to,
-    subject: options.subject,
-    html: options.html,
-    text: options.text,
-  });
+  try {
+    const info = await smtpTransporter.sendMail({
+      from: emailFrom,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
 
-  if (error) {
     // eslint-disable-next-line no-console
-    console.error(`[email-service] Resend API error:`, JSON.stringify(error, null, 2));
-    throw new Error(`Resend error: ${error.message}`);
+    console.log(
+      `[email-service] Email sent successfully. ID: ${info.messageId}`,
+    );
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[email-service] SMTP send error:", error);
+    throw error;
   }
-
-  // eslint-disable-next-line no-console
-  console.log(`[email-service] Email sent successfully. ID: ${data?.id}`);
 }
 
 // ── Public email functions ─────────────────────────────────────────────────────
@@ -110,10 +114,7 @@ export async function sendPasswordResetEmail(payload: {
   });
 }
 
-export async function sendWelcomeEmail(payload: {
-  to: string;
-  name: string;
-}) {
+export async function sendWelcomeEmail(payload: { to: string; name: string }) {
   const dashboardUrl = `${env.appUrl.replace(/\/$/, "")}/dashboard`;
 
   const html = wrapHtml(`
@@ -128,5 +129,20 @@ export async function sendWelcomeEmail(payload: {
     subject: "Welcome to Bus Ticketing System!",
     html,
     text: `Welcome to Bus Ticketing System, ${payload.name}! Visit your dashboard: ${dashboardUrl}`,
+  });
+}
+
+export async function sendTestEmail(payload: { to: string }) {
+  const html = wrapHtml(`
+    <h2 style="margin:0 0 12px;">Brevo SMTP test email</h2>
+    <p style="margin:0 0 16px;">If you received this email, Brevo SMTP is configured correctly.</p>
+    <p style="margin:0;">Sent at ${new Date().toUTCString()}</p>
+  `);
+
+  await send({
+    to: payload.to,
+    subject: "Brevo SMTP test email",
+    html,
+    text: "If you received this email, Brevo SMTP is configured correctly.",
   });
 }

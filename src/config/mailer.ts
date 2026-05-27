@@ -1,15 +1,22 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { env } from "./env.js";
 
 /**
- * Resend client – used by the email service to dispatch transactional emails.
- * Falls back to a lightweight stub in development so the app starts even
- * without a RESEND_API_KEY, logging the email payload to the console instead.
+ * SMTP transport for Brevo (Sendinblue). Falls back to null when credentials
+ * are missing so the app can still boot in development.
  */
-export const resend = env.resendApiKey
-  ? new Resend(env.resendApiKey)
-  : null;
+export const smtpTransporter =
+  env.brevoUser && env.brevoPass
+    ? nodemailer.createTransport({
+        host: "smtp-relay.brevo.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: env.brevoUser,
+          pass: env.brevoPass,
+        },
+      })
+    : null;
 
 /** Default "from" address for all outgoing emails. */
-export const emailFrom =
-  env.emailFrom || "Bus Ticketing <onboarding@resend.dev>";
+export const emailFrom = env.emailFrom;

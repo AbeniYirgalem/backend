@@ -20,9 +20,10 @@ const allowedOrigins = new Set<string>([
     .filter(Boolean),
 ]);
 
-const resendApiKey = process.env.RESEND_API_KEY || "";
+const brevoUser = process.env.BREVO_USER || "";
+const brevoPass = process.env.BREVO_PASS || "";
 const emailFrom =
-  process.env.EMAIL_FROM || "Bus Ticketing <onboarding@resend.dev>";
+  process.env.EMAIL_FROM || "Bus Ticketing <no-reply@bus-ticketing.local>";
 
 export const env = {
   nodeEnv,
@@ -36,7 +37,8 @@ export const env = {
   clientUrl,
   allowedOriginsRaw,
   allowedOrigins: Array.from(allowedOrigins).filter(Boolean),
-  resendApiKey,
+  brevoUser,
+  brevoPass,
   emailFrom,
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
@@ -55,7 +57,10 @@ if (env.nodeEnv === "production") {
       "CLIENT_URL and APP_URL must be non-localhost in production",
     );
   }
-  if (!env.resendApiKey) {
-    throw new Error("RESEND_API_KEY is required in production");
+  if (!env.brevoUser || !env.brevoPass) {
+    throw new Error("BREVO_USER and BREVO_PASS are required in production");
+  }
+  if (!process.env.EMAIL_FROM) {
+    throw new Error("EMAIL_FROM is required in production");
   }
 }

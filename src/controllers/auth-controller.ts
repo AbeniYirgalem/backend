@@ -7,17 +7,23 @@ import {
   resendVerificationEmail,
   verifyEmailToken,
 } from "../services/auth-service.js";
+import { sendTestEmail } from "../services/email-service.js";
 import { logActivity } from "../services/activity-service.js";
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const user = await registerUser(req.body);
 
   // Persist: user account creation event
-  logActivity(user._id.toString(), "REGISTER", {
-    email: user.email,
-    role: user.role,
-    name: user.name,
-  }, req);
+  logActivity(
+    user._id.toString(),
+    "REGISTER",
+    {
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    },
+    req,
+  );
 
   sendResponse(res, 201, "Check your email to verify your account.", {
     id: user._id,
@@ -28,10 +34,15 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   const { user, token } = await loginUser(req.body);
 
   // Persist: successful login event
-  logActivity(user.id, "LOGIN", {
-    email: user.email,
-    role: user.role,
-  }, req);
+  logActivity(
+    user.id,
+    "LOGIN",
+    {
+      email: user.email,
+      role: user.role,
+    },
+    req,
+  );
 
   sendResponse(res, 200, "Login successful", { token, user });
 });
@@ -62,3 +73,8 @@ export const resendVerification = asyncHandler(
     });
   },
 );
+
+export const testEmail = asyncHandler(async (req: Request, res: Response) => {
+  await sendTestEmail({ to: req.body.email });
+  return sendResponse(res, 200, "Test email sent.", { sent: true });
+});
