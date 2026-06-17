@@ -19,6 +19,7 @@ import rfidRoutes from "./rfid-routes.js";
 import notificationRoutes from "./notification-routes.js";
 import activityRoutes from "./activity-routes.js";
 import operatorRoutes from "./operator-routes.js";
+import firebaseRoutes from "./firebase-routes.js";
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use("/rfid", rfidRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/activity", activityRoutes);
 router.use("/operators", operatorRoutes);
+router.use("/firebase", firebaseRoutes);
 
 export default router;
