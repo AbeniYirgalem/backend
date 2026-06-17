@@ -41,6 +41,12 @@ export const env = {
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || "",
+  // Firebase Admin SDK
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID || "",
+  firebaseDatabaseUrl: process.env.FIREBASE_DATABASE_URL || "",
+  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || "",
+  // Firebase private key: replace escaped \n with real newlines
+  firebasePrivateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
 };
 
 if (!env.mongodbUri) {
