@@ -1,3 +1,19 @@
+/**
+ * RFID Controller.
+ *
+ * Location: backend/src/controllers/rfid-controller.ts
+ *
+ * Handles all RFID-related HTTP endpoints:
+ *  - Passenger self-service (view card, balance, history, recharge)
+ *  - Operator scan (manual fare deduction via app)
+ *  - ESP32 hardware scan (unauthenticated IoT endpoint with API key)
+ *  - Admin analytics (system-wide stats)
+ *
+ * The ESP32 scan endpoint is the architectural bridge: it receives the raw
+ * hardware payload, runs all MongoDB business logic first, then pushes
+ * real-time updates to Firebase RTDB so the frontend dashboard stays live.
+ */
+
 import type { Request, Response } from "express";
 import { asyncHandler } from "../utils/async-handler.js";
 import { sendResponse } from "../utils/response.js";
@@ -6,7 +22,15 @@ import { Transaction } from "../models/Transaction.js";
 import { Notification } from "../models/Notification.js";
 import { User } from "../models/User.js";
 import { Trip } from "../models/Trip.js";
+import { Bus } from "../models/Bus.js";
+import { GPSLog } from "../models/GPSLog.js";
+import { PassengerStatistics } from "../models/PassengerStatistics.js";
 import { logActivity } from "../services/activity-service.js";
+import {
+  saveRfidTap,
+  saveGpsCoordinates,
+  savePassengerCount,
+} from "../services/firebase-service.js";
 import mongoose from "mongoose";
 
 function createHttpError(message: string, statusCode: number) {
@@ -14,6 +38,12 @@ function createHttpError(message: string, statusCode: number) {
   error.statusCode = statusCode;
   return error;
 }
+
+function nowTs(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+// ─── Passenger self-service ───────────────────────────────────────────────────
 
 /** GET /api/rfid/card — Get the authenticated user's RFID card */
 export const getMyCard = asyncHandler(async (req: Request, res: Response) => {
@@ -126,6 +156,8 @@ export const rechargeMyCard = asyncHandler(async (req: Request, res: Response) =
   sendResponse(res, 200, "Card recharged", { card, transaction });
 });
 
+// ─── Operator scan (JWT-authenticated) ───────────────────────────────────────
+
 /** POST /api/rfid/scan — Operator scans an RFID card for fare deduction */
 export const scanCard = asyncHandler(async (req: Request, res: Response) => {
   const { cardUid, fare, routeId } = req.body;
@@ -178,7 +210,7 @@ export const scanCard = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  // Deduct fare in a transaction
+  // Deduct fare in a MongoDB transaction
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -227,7 +259,7 @@ export const scanCard = asyncHandler(async (req: Request, res: Response) => {
       .select("name email phone")
       .lean();
 
-    // Persist: RFID scan activity log (operator action on passenger's card)
+    // Persist: activity logs
     logActivity(req.user!.id, "RFID_SCAN", {
       cardUid,
       fare,
@@ -237,7 +269,6 @@ export const scanCard = asyncHandler(async (req: Request, res: Response) => {
       balanceAfter: card.balance,
     }, req);
 
-    // Persist: payment activity log on the passenger's own record
     logActivity(card.userId.toString(), "RFID_PAYMENT", {
       cardUid,
       fare,
@@ -267,7 +298,283 @@ export const scanCard = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-/** GET /api/rfid/stats — Operator-only system-wide RFID analytics */
+// ─── ESP32 hardware scan (API key authenticated) ──────────────────────────────
+
+/**
+ * POST /api/rfid/esp32-scan
+ *
+ * Unauthenticated endpoint for ESP32 RFID reader hardware.
+ * Authentication is handled via the esp32AuthMiddleware (X-ESP32-Key header).
+ *
+ * ESP32 payload:
+ * {
+ *   "card_uid": "A1B2C3D4",
+ *   "bus_id": "BUS001",
+ *   "latitude": 9.032145,
+ *   "longitude": 38.763245,
+ *   "passenger_count": 27,     // optional — current board count from counter sensor
+ *   "speed": 35,               // optional — km/h from GPS module
+ *   "heading": 180             // optional — compass heading 0-359
+ * }
+ */
+export const scanCardEsp32 = asyncHandler(async (req: Request, res: Response) => {
+  const {
+    card_uid,
+    bus_id,
+    latitude,
+    longitude,
+    passenger_count,
+    speed,
+    heading,
+  } = req.body as {
+    card_uid?: string;
+    bus_id?: string;
+    latitude?: number;
+    longitude?: number;
+    passenger_count?: number;
+    speed?: number;
+    heading?: number;
+  };
+
+  // ── Validation ──────────────────────────────────────────────────────────
+  if (!card_uid || typeof card_uid !== "string") {
+    throw createHttpError("card_uid is required", 400);
+  }
+  if (!bus_id || typeof bus_id !== "string") {
+    throw createHttpError("bus_id is required", 400);
+  }
+
+  // ── Look up the card ────────────────────────────────────────────────────
+  const card = await Card.findOne({ cardUid: card_uid.toUpperCase() });
+  if (!card) {
+    // Push a rejected event to Firebase so the dashboard sees it in real-time
+    void saveRfidTap({
+      card_uid,
+      bus_id,
+      latitude,
+      longitude,
+      timestamp: nowTs(),
+    }).catch(() => undefined);
+
+    return sendResponse(res, 200, "Scan processed", {
+      success: false,
+      message: "Card not registered",
+    });
+  }
+
+  if (card.status !== "active") {
+    void saveRfidTap({
+      card_uid,
+      bus_id,
+      latitude,
+      longitude,
+      timestamp: nowTs(),
+    }).catch(() => undefined);
+
+    return sendResponse(res, 200, "Scan processed", {
+      success: false,
+      message: `Card is ${card.status}`,
+    });
+  }
+
+  // ── Resolve fare from bus → route ───────────────────────────────────────
+  let fare = 5; // default fare in ETB
+  let busRecord: { capacity?: number; routeId?: mongoose.Types.ObjectId } | null = null;
+
+  try {
+    const busDoc = await Bus.findOne({ busId: bus_id.toUpperCase() })
+      .populate("routeId")
+      .lean();
+    if (busDoc) {
+      busRecord = busDoc as any;
+      const route = (busDoc as any).routeId as { baseFare?: number } | null;
+      if (route?.baseFare && route.baseFare > 0) {
+        fare = route.baseFare;
+      }
+    }
+  } catch {
+    // Non-fatal: fall through with default fare
+  }
+
+  // ── Check for duplicate scan ─────────────────────────────────────────────
+  const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+  const recentTap = await Transaction.findOne({
+    cardId: card._id,
+    type: "fare",
+    status: "success",
+    createdAt: { $gte: twoMinAgo },
+  }).lean();
+  if (recentTap) {
+    return sendResponse(res, 200, "Scan processed", {
+      success: false,
+      message: "Duplicate scan — please wait before scanning again",
+    });
+  }
+
+  // ── Insufficient balance check ───────────────────────────────────────────
+  const balanceBefore = card.balance;
+  if (balanceBefore < fare) {
+    // Persist failed transaction
+    await Transaction.create({
+      userId: card.userId,
+      cardId: card._id,
+      type: "fare",
+      amount: fare,
+      balanceBefore,
+      balanceAfter: balanceBefore,
+      status: "failed",
+      note: "Insufficient balance (ESP32 scan)",
+    });
+
+    // Push rejected event to Firebase
+    void saveRfidTap({ card_uid, bus_id, latitude, longitude, timestamp: nowTs() }).catch(() => undefined);
+
+    return sendResponse(res, 200, "Scan processed", {
+      success: false,
+      message: "Insufficient balance",
+    });
+  }
+
+  // ── Atomic MongoDB fare deduction ────────────────────────────────────────
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    card.balance = balanceBefore - fare;
+    card.lastTapAt = new Date();
+    await card.save({ session });
+
+    const trip = await Trip.create(
+      [
+        {
+          userId: card.userId,
+          cardId: card._id,
+          fare,
+          status: "completed",
+          tappedAt: new Date(),
+          completedAt: new Date(),
+        },
+      ],
+      { session },
+    );
+
+    const transaction = await Transaction.create(
+      [
+        {
+          userId: card.userId,
+          cardId: card._id,
+          type: "fare",
+          amount: fare,
+          balanceBefore,
+          balanceAfter: card.balance,
+          status: "success",
+          tripId: trip[0]._id,
+          note: `ESP32 scan — bus ${bus_id}`,
+        },
+      ],
+      { session },
+    );
+
+    await session.commitTransaction();
+
+    // ── Get passenger details for response ───────────────────────────────
+    const passenger = await User.findById(card.userId).select("name").lean();
+
+    const ts = nowTs();
+    const capacity = (busRecord?.capacity as number | undefined) ?? 45;
+    const paxCount = typeof passenger_count === "number" ? passenger_count : undefined;
+
+    // ── Push real-time updates to Firebase RTDB (fire-and-forget) ────────
+
+    // 1. RFID tap event → bus_logs feed
+    void saveRfidTap({
+      card_uid,
+      bus_id,
+      latitude,
+      longitude,
+      passenger_count: paxCount,
+      timestamp: ts,
+    }).catch(() => undefined);
+
+    // 2. GPS snapshot → gps_tracking/{bus_id}
+    if (typeof latitude === "number" && typeof longitude === "number") {
+      void saveGpsCoordinates({
+        bus_id,
+        latitude,
+        longitude,
+        speed,
+        heading,
+        timestamp: ts,
+      }).catch(() => undefined);
+
+      // 3. Persist GPS history to MongoDB
+      void GPSLog.create({
+        busId: bus_id.toUpperCase(),
+        latitude,
+        longitude,
+        speedKmh: speed ?? 0,
+        heading: heading ?? 0,
+        timestamp: ts,
+      }).catch(() => undefined);
+    }
+
+    // 4. Passenger count snapshot → passenger_statistics/{bus_id}
+    if (typeof paxCount === "number") {
+      void savePassengerCount({
+        bus_id,
+        current_count: paxCount,
+        capacity,
+        timestamp: ts,
+      }).catch(() => undefined);
+
+      // 5. Persist boarding stats to MongoDB (upsert today's record)
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      void PassengerStatistics.findOneAndUpdate(
+        { busId: bus_id.toUpperCase(), date: today },
+        {
+          $set: {
+            currentCount: paxCount,
+            capacity,
+            occupancyPct: Math.min(100, Math.round((paxCount / capacity) * 100)),
+          },
+          $max: { peakCount: paxCount },
+          $inc: { totalBoardings: 1 },
+        },
+        { upsert: true },
+      ).catch(() => undefined);
+    }
+
+    // 6. Log activity
+    logActivity(card.userId.toString(), "RFID_PAYMENT", {
+      cardUid: card_uid,
+      fare,
+      busId: bus_id,
+      balanceBefore,
+      balanceAfter: card.balance,
+      source: "esp32",
+    });
+
+    // Success response — must be ESP32-parseable (small JSON)
+    return sendResponse(res, 200, "Fare deducted", {
+      success: true,
+      userId: card.userId.toString(),
+      name: passenger?.name ?? "Passenger",
+      fare,
+      remainingBalance: card.balance,
+      transactionId: transaction[0]._id.toString(),
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+});
+
+// ─── Admin analytics ──────────────────────────────────────────────────────────
+
+/** GET /api/rfid/stats — System-wide RFID analytics (admin/operator) */
 export const getStats = asyncHandler(async (_req: Request, res: Response) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
